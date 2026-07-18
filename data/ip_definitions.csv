@@ -1,0 +1,8 @@
+cidr,disposition,notes
+127.0.0.0/8,allow,Loopback
+10.0.0.0/8,ignore,Private LAN range — normal
+172.16.0.0/12,ignore,Private LAN range — normal
+192.168.0.0/16,ignore,Private LAN range — normal
+169.254.0.0/16,ignore,Link-local — normal
+::1/128,allow,IPv6 loopback
+fe80::/10,ignore,IPv6 link-local — normal

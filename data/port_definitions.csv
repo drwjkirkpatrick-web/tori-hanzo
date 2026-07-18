@@ -1,0 +1,20 @@
+proto,port,process,disposition,notes
+tcp,22,,allow,System SSH daemon (process may be hidden without root)
+tcp,8642,hermes,allow-local,Hermes api_server — localhost only
+tcp,9193,tori-hanzo,allow-local,Tori-Hanzo admin portal — localhost only
+tcp,9191,,allow-local,Local Flask app (cnidaria-frames) — localhost only
+tcp,9192,,allow-local,Local Flask app (scary-auntie) — localhost only
+tcp,631,,alert,Printing — review if seen
+tcp,53,systemd-resolve,allow-local,Local DNS stub resolver
+udp,53,systemd-resolve,ignore,DNS stub resolver — normal
+udp,67,,ignore,DHCP server/client chatter
+udp,68,,ignore,DHCP client — normal
+udp,123,systemd-timesyncd,ignore,NTP — normal
+udp,5353,,ignore,mDNS / Avahi — normal LAN chatter
+udp,1900,,ignore,SSDP/UPnP discovery — normal LAN chatter
+tcp,445,,alert,SMB — unexpected on this host
+tcp,139,,alert,NetBIOS — unexpected on this host
+tcp,3389,,deny,RDP should never listen here
+tcp,23,,deny,Telnet should never exist
+tcp,4444,,deny,Common Metasploit listener
+tcp,6667,,alert,IRC — classic botnet C2 channel

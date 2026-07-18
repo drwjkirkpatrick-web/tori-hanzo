@@ -1,0 +1,5 @@
+# Tori-Hanzo runtime dependency (admin portal)
+flask>=3.0,<4.0
+
+# Test-only dependency
+pytest>=8.0

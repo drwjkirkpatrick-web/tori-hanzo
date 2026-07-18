@@ -1,0 +1,9 @@
+port,process,notes
+5353,,mDNS multicast — constant normal churn on LAN
+1900,,SSDP/UPnP discovery chatter
+67,,DHCP
+68,,DHCP client
+123,systemd-timesyncd,NTP time sync
+137,,NetBIOS name service
+138,,NetBIOS datagram
+546,,DHCPv6 client

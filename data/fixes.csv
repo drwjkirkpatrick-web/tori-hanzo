@@ -1,0 +1,13 @@
+finding_type,action,auto,notes
+rogue_process,kill_process,false,Kill matching PID — manual confirm until trusted
+denied_ip_connected,block_ip,false,Block source IP at the firewall — manual confirm
+ssh_bruteforce,alert,true,Alert only; blocking needs admin judgement
+ssh_login,alert,true,Informational
+new_listener,alert,true,Informational
+removed_listener,alert,true,Informational
+suspicious_process,alert,true,Review in portal before acting
+file_integrity_change,alert,true,Review diff manually
+file_integrity_missing,alert,true,Review manually
+kernel_alert,alert,true,Informational
+self_integrity_change,alert,true,Investigate before any restart of agent
+unknown_remote_connection,alert,true,Low-severity informational

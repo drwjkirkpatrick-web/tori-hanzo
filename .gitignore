@@ -1,0 +1,13 @@
+# --- Runtime state: never commit (contains IP hashes, events, tokens) ---
+state/
+*.pyc
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# Local config overrides (may contain site-specific policy)
+config.local.json
+
+# OS noise
+.DS_Store

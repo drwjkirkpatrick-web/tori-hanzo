@@ -1,0 +1,16 @@
+name,pattern,match_type,disposition,notes
+xmrig-miner,xmrig,substring,deny,XMRig cryptominer
+xmr-stak-miner,xmr-stak,substring,deny,XMR-Stak cryptominer
+minerd,minerd,substring,deny,cpuminer
+kdevtmpfsi,kdevtmpfsi,substring,deny,Known Linux miner masquerading as kernel thread
+kinsing,kinsing,substring,deny,Kinsing malware agent
+netcat-listener,nc -l,substring,alert,Netcat in listen mode
+netcat-listener-2,ncat -l,substring,alert,Ncat in listen mode
+reverse-shell-devtcp,/dev/tcp/,substring,alert,Bash /dev/tcp reverse shell pattern
+base64-pipe-sh,base64 -d | sh,substring,alert,Base64 decode piped to shell
+base64-pipe-bash,base64 -d | bash,substring,alert,Base64 decode piped to bash
+chmod-777-etc,chmod 777 /etc,substring,alert,Mass-permission change under /etc
+nmap-scan,nmap ,substring,alert,Port scanner running locally
+masscan,masscan,substring,alert,Fast port scanner
+hydra,hydra,substring,deny,SSH/password brute-force tool
+mimikatz,mimikatz,substring,deny,Credential dumper
