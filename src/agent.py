@@ -30,6 +30,9 @@ from state import StateStore, read_json, atomic_write_json
 
 class Agent:
     def __init__(self, cfg, run=monitor.run_command):
+        self._shutdown = False
+        signal.signal(signal.SIGTERM, self._on_stop)
+        signal.signal(signal.SIGINT, self._on_stop)
         self.cfg = cfg
         self.state = StateStore(cfg.state_dir)
         self.defs = DefinitionStore(cfg.data_dir)
@@ -83,6 +86,14 @@ class Agent:
             obs, {"listeners": listener_baseline}, defs, cfg,
             integrity=integrity, self_changed=self_changed,
             salt=state.get_salt())
+        # UDP baseline drift: any sockets present now that were not in the baseline
+        # at last cycle (and not flagged as new_listener) is worth an alert.
+        udp_prev = listener_baseline.get("udp_listeners", frozenset())
+        udp_now = frozenset(new_lb.get("udp_listeners", ()))
+        if udp_prev != udp_now and udp_prev:
+            drifts = {"added": sorted(udp_now - udp_prev),
+                      "removed": sorted(udp_prev - udp_now)}
+            state.append_event("udp_baseline_drift", drifts)
         atomic_write_json(lb_path, new_lb)
 
         # dedupe against existing open findings
@@ -171,12 +182,15 @@ class Agent:
     # ------------------------------------------------------------------
     # daemon
     # ------------------------------------------------------------------
+    def _on_stop(self, signum, frame):
+        self._shutdown = True
+
     def serve_forever(self) -> None:
         print(f"[tori-hanzo] daemon started — cycle every "
               f"{self.cfg.monitor_interval_sec}s")
         self.state.append_event("daemon_start", {
             "interval": self.cfg.monitor_interval_sec})
-        while True:
+        while not self._shutdown:
             try:
                 self.run_cycle()
             except Exception as exc:  # the watchdog must not die
@@ -194,3 +208,4 @@ def source_fingerprint(base_dir: Path) -> str:
         except OSError:
             pass
     return h.hexdigest()[:12]
+import signal

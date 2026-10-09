@@ -18,7 +18,9 @@ import hmac
 import html
 import secrets
 from functools import wraps
+from pathlib import Path
 
+from datetime import datetime, timedelta, timezone
 from flask import (Flask, abort, g, jsonify, redirect, render_template_string,
                    request, session, url_for)
 
@@ -26,6 +28,8 @@ from definitions import CSV_HEADERS
 from state import read_json
 
 MAX_LOGIN_ATTEMPTS = 5
+SESSION_IDLE_TIMEOUT_MIN = 30
+LOGIN_LOCKOUT_MIN = 15
 
 # ----------------------------------------------------------------------
 # templates (inline, single-file deployment)
@@ -36,6 +40,13 @@ BASE = """<!doctype html>
   :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#e6edf3;
           --dim:#8b949e; --accent:#58a6ff; }
   * { box-sizing:border-box; }
+  body.light {
+    --bg:#f6f3ec; --panel:#fff; --border:#d9d4c8; --fg:#2c2a26;
+    --dim:#6b6558; --accent:#2c5f2d;
+  }
+  body.light input[type=text],body.light input[type=password],body.light input[type=number],body.light textarea {
+    background:#faf8f2; color:#2c2a26;
+  }
   body { margin:0; background:var(--bg); color:var(--fg);
          font:14px/1.5 -apple-system,"Segoe UI",Roboto,monospace; }
   header { background:var(--panel); border-bottom:1px solid var(--border);
@@ -79,6 +90,7 @@ BASE = """<!doctype html>
         border-radius:8px; overflow-x:auto; white-space:pre-wrap; }
 </style></head><body>
 <header><b>⛩ Tori-Hanzo</b>
+  <button onclick="document.body.classList.toggle('light')" style="margin-left:auto" title="toggle theme">◐</button>
   <nav>
     <a href="{{ url_for('dashboard') }}">Dashboard</a>
     <a href="{{ url_for('definitions_page') }}">Definitions</a>
@@ -114,6 +126,49 @@ def create_app(cfg, state, defs, responder, agent=None) -> Flask:
     app = Flask(__name__)
     app.secret_key = state.get_salt()  # stable per-install signing key
 
+    # Harden the session cookie: never readable to JS, never sent over HTTP,
+    # never sent cross-site — strict. Bound to 127.0.0.1 only.
+    app.config.update(
+        SESSION_COOKIE_SECURE=False,       # localhost-only portal: no HTTPS here, but
+                                           # SameSite+HttpOnly still block XSS/CSRF theft
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Strict",
+        PERMANENT_SESSION_LIFETIME=timedelta(minutes=SESSION_IDLE_TIMEOUT_MIN),
+    )
+
+    # security response headers on every response
+    @app.after_request
+    def _security_headers(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        resp.headers.setdefault("Content-Security-Policy",
+                                "default-src 'self'; style-src 'unsafe-inline' 'self'")
+        resp.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+        resp.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
+        return resp
+
+    # server-side session idle timeout (independent of Flask cookie)
+    @app.before_request
+    def _session_idle_timeout():
+        if session.get("auth"):
+            now = datetime.now(timezone.utc)
+            last = session.get("last_seen")
+            if last:
+                try:
+                    last_dt = datetime.fromisoformat(last)
+                    if last_dt.tzinfo is None:
+                        last_dt = last_dt.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    session.clear()
+                    return redirect(url_for("login"))
+                if now - last_dt > timedelta(minutes=SESSION_IDLE_TIMEOUT_MIN):
+                    session.clear()
+                    if request.path.startswith("/api/"):
+                        return jsonify({"error": "session expired"}), 401
+                    return redirect(url_for("login"))
+            session["last_seen"] = now.isoformat(timespec="seconds")
+
     # ---------------- auth helpers ----------------
     def _check_csrf() -> bool:
         token = session.get("csrf")
@@ -138,15 +193,28 @@ def create_app(cfg, state, defs, responder, agent=None) -> Flask:
             session["csrf"] = secrets.token_hex(16)
 
     # ---------------- auth routes ----------------
+    @app.errorhandler(500)
+    def _internal_error(e):
+        return _page("Error", "<p>Something went wrong on our side.</p>"), 500
+
+    @app.route("/login", methods=["GET", "POST"])
     @app.route("/login", methods=["GET", "POST"])
     def login():
         error = ""
+        # persistent lockout: survives session restarts
+        lockout_until = state.get_login_lockout_until()
+        if lockout_until:
+            mins = max(1, int((lockout_until - datetime.now(timezone.utc))
+                              .total_seconds() // 60))
+            return _page("Login",
+                         f"<p>Locked out. Try again in about {mins} minute(s).</p>")
         if session.get("login_fails", 0) >= MAX_LOGIN_ATTEMPTS:
             return _page("Login", "<p>Too many failed attempts. Restart the "
                                   "browser session to try again.</p>")
         if request.method == "POST":
             token = request.form.get("token", "")
             if hmac.compare_digest(token, state.get_portal_token()):
+                state.login_reset_fails()
                 session.clear()
                 session["auth"] = True
                 session["csrf"] = secrets.token_hex(16)
@@ -154,7 +222,9 @@ def create_app(cfg, state, defs, responder, agent=None) -> Flask:
                 return redirect(url_for("dashboard"))
             session["login_fails"] = session.get("login_fails", 0) + 1
             state.append_event("portal_login", {"ok": False})
+            state.record_login_failure()  # persistent counter
             error = "Invalid token."
+
         body = f"""
         <h2>Admin Login</h2>
         <p class="muted">Token lives in <code>state/portal_token</code> —
@@ -166,7 +236,6 @@ def create_app(cfg, state, defs, responder, agent=None) -> Flask:
           <p class="sev-critical">{_esc(error)}</p>
         </form>"""
         return _page("Login", body)
-
     @app.route("/logout")
     def logout():
         session.clear()
@@ -486,6 +555,10 @@ def create_app(cfg, state, defs, responder, agent=None) -> Flask:
                                  if f.get("status") == "open"),
         })
 
+    @app.route("/api/health")
+    def api_health():
+        return jsonify({"ok": True})
+
     @app.route("/api/findings")
     @require_auth
     def api_findings():
@@ -495,5 +568,16 @@ def create_app(cfg, state, defs, responder, agent=None) -> Flask:
     @require_auth
     def api_report():
         return jsonify(read_json(state.dir / "reports" / "latest.json", {}))
+
+    @app.route("/self-test", methods=["POST"])
+    @require_auth
+    def self_test():
+        import subprocess as _sp
+        r = _sp.run(["/usr/bin/python3", "-m", "pytest", "tests/", "-q", "--tb=no"],
+                    capture_output=True, text=True, timeout=300,
+                    cwd=str(Path(__file__).resolve().parents[1]))
+        summary = r.stdout.strip().splitlines()[-1] if r.stdout else "no output"
+        return _page("Self-test", f"<pre>{_esc(summary)}</pre>",
+                     flash="Self-test complete.")
 
     return app

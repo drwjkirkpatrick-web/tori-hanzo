@@ -71,6 +71,9 @@ def read_json(path: Path, default):
 class StateStore:
     """Small facade over the state directory."""
 
+    MAX_STATE_MB = 50
+
+
     def __init__(self, state_dir: Path):
         self.dir = Path(state_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -102,6 +105,45 @@ class StateStore:
     def get_portal_token(self) -> str:
         """Admin token for the web portal (shown once via CLI)."""
         return self._get_or_create_secret("portal_token", nbytes=24)
+
+    # -- persistent login lockout (survives session restarts, admin portal) --
+
+    def record_login_failure(self):
+        """One failed login; returns lockout-until ISO string when MAX fails hit."""
+        lock_file = self.dir / "login_fails.json"
+        try:
+            data = read_json(lock_file)
+        except Exception:
+            data = {"fails": 0}
+        n = data.get("fails", 0) + 1
+        until = None
+        if n >= 5:
+            until = (datetime.now(timezone.utc) +
+                     timedelta(minutes=15)).isoformat(timespec="seconds")
+        atomic_write_text(lock_file, json.dumps({"fails": n, "until": until}) + "\n")
+        return until
+
+    def get_login_lockout_until(self):
+        try:
+            data = read_json(self.dir / "login_fails.json")
+        except Exception:
+            return None
+        until = data.get("until")
+        if not until:
+            return None
+        try:
+            dt = datetime.fromisoformat(until)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt if dt > datetime.now(timezone.utc) else None
+        except ValueError:
+            return None
+
+    def login_reset_fails(self) -> None:
+        try:
+            (self.dir / "login_fails.json").unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass
 
     # ------------------------------------------------------------------
     # event log

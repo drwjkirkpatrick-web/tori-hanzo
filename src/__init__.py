@@ -16,4 +16,4 @@ portal       — Flask admin web UI (localhost-only, token auth)
 agent        — the daemon loop tying everything together
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

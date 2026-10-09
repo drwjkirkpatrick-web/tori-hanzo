@@ -347,3 +347,19 @@ def snapshot(cfg, salt: str, run=run_command) -> dict:
         "kernel": collect_kernel(cfg.lookback_hours, run,
                                  cfg.max_kernel_lines),
     }
+
+
+def udp_listener_fingerprint(stdout: str) -> frozenset:
+    """ss -lunp 'UDP sockets ignored (baseline)' -> a comparable fingerprint of UDP
+    listeners. Diff this across days to catch a listener that appeared or vanished.
+    Parse-only, no state."""
+    out = set()
+    for line in stdout.splitlines()():
+        line = line.strip()
+        if not line or line.startswith(("#", "Netid")):
+            continue
+        # keep the address:port column: netstat/ss format
+        cols = line.split()
+        if len(cols) >= 4:
+            out.add(cols[3])  # local address:port
+    return frozenset(out)

@@ -73,8 +73,9 @@ def cmd_defs(agent: Agent) -> int:
     return 0
 
 
-def cmd_token(agent: Agent) -> int:
-    print(agent.state.get_portal_token())
+def cmd_token(agent: Agent, reveal: bool = False) -> int:
+    tok = agent.state.get_portal_token()
+    print(tok if reveal else tok[:4] + "…" + tok[-4:])
     return 0
 
 
@@ -82,6 +83,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         prog="tori-hanzo",
         description="Local security agent for a Hermes host")
+    parser.add_argument("--reveal", action="store_true",
+                        help="print the full portal token (default: masked)")
     parser.add_argument("command", choices=[
         "run-once", "daemon", "portal", "serve", "report",
         "defs", "token", "version"])
@@ -101,7 +104,7 @@ def main() -> int:
         "serve": lambda: cmd_serve(cfg, agent),
         "report": lambda: cmd_report(agent),
         "defs": lambda: cmd_defs(agent),
-        "token": lambda: cmd_token(agent),
+        "token": lambda: cmd_token(agent, reveal=getattr(args, "reveal", False)),
     }[args.command]()
 
 

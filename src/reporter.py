@@ -35,6 +35,14 @@ def _severity_counts(findings: list[dict]) -> Counter:
     return Counter(f.get("severity", "info") for f in findings)
 
 
+def _report_hmac(lines: list[str], state: StateStore) -> str:
+    """HMAC-integrity stamp so a report can't be quietly tampered with."""
+    import hashlib, hmac
+    key = state.get_salt().encode()
+    payload = "\n".join(lines) + "|" + str(len(lines))
+    return hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()[:10]
+
+
 def generate_daily_report(cfg, state: StateStore, defs,
                           hours: int = 24) -> tuple[str, dict]:
     """Assemble the daily summary from state (no live probing — the agent
