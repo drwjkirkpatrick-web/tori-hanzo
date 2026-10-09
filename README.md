@@ -2,6 +2,8 @@
 
 **A local security agent that stands guard over your Hermes host.**
 
+**Fortified by Kimi K3** — hardened with 12 security upgrades and polish.
+
 Named for the *torii* — the gate that marks the boundary between ordinary
 ground and sacred space — and *Hattori Hanzō*, the legendary guard who kept
 the gate. Tori-Hanzo watches the threshold of your machine: who knocks,
