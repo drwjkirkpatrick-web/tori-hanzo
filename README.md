@@ -31,15 +31,25 @@ small, busy Linux box with the calm confidence of a whole security team.**
 
 ```bash
 cd tori-hanzo
-pip install -r requirements.txt      # just Flask (+ pytest for tests)
 
-python3 tori-hanzo.py run-once       # first cycle: learns the baseline
-python3 tori-hanzo.py run-once       # second cycle: quiet — baseline known
-python3 tori-hanzo.py report         # print the daily summary
-python3 tori-hanzo.py portal         # admin UI on http://127.0.0.1:9193/
-python3 tori-hanzo.py token          # print the portal login token
-python3 tori-hanzo.py serve          # daemon + portal together
+# Dependencies live in a project venv — not the system python. A bare
+# `python3` on this host may be a Hermes-managed interpreter with no Flask,
+# so the venv interpreter is used explicitly everywhere below.
+/usr/bin/python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt   # Flask + pytest
+
+./.venv/bin/python tori-hanzo.py run-once    # first cycle: learns the baseline
+./.venv/bin/python tori-hanzo.py run-once    # second cycle: quiet — baseline known
+./.venv/bin/python tori-hanzo.py report      # print the daily summary
+./.venv/bin/python tori-hanzo.py portal      # admin UI on http://127.0.0.1:9193/
+./.venv/bin/python tori-hanzo.py token       # print the portal login token
+./.venv/bin/python tori-hanzo.py serve       # daemon + portal together
 ```
+
+The daily Telegram report is driven by the Hermes cron job script
+`~/.hermes/scripts/tori_hanzo_daily.sh`, which calls
+`/home/walker/projects/tori-hanzo/.venv/bin/python` directly. If the venv is
+ever missing, that script says so and exits non-zero instead of failing silent.
 
 The first cycle deliberately flags everything as *new* — that's the agent
 learning what normal looks like on your host. From the second cycle on, it
